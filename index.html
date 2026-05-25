@@ -382,6 +382,16 @@
           </label>
 
           <label>
+            Git user name
+            <input id="gitUserName" value="ASCII Commit Bot" autocomplete="name" />
+          </label>
+
+          <label>
+            Git email
+            <input id="gitUserEmail" value="ascii-commit@example.local" autocomplete="email" />
+          </label>
+
+          <label>
             Intensity
             <select id="intensity">
               <option value="4">Level 4</option>
@@ -657,6 +667,8 @@
 
       const els = {
         message: document.querySelector("#message"),
+        gitUserName: document.querySelector("#gitUserName"),
+        gitUserEmail: document.querySelector("#gitUserEmail"),
         intensity: document.querySelector("#intensity"),
         fontStyle: document.querySelector("#fontStyle"),
         letterGap: document.querySelector("#letterGap"),
@@ -1194,10 +1206,16 @@
         return clean ? "github-ascii-" + clean : "github-ascii-commit";
       }
 
+      function shellQuote(value) {
+        return "'" + String(value).replace(/'/g, "'\\''") + "'";
+      }
+
       function updateBashPreview() {
         const name = projectName();
         const commits = [];
         const count = Number(els.intensity.value);
+        const userName = els.gitUserName.value.trim() || "ASCII Commit Bot";
+        const userEmail = els.gitUserEmail.value.trim() || "ascii-commit@example.local";
 
         for (let week = 0; week < WEEKS; week += 1) {
           for (let day = 0; day < DAYS; day += 1) {
@@ -1215,8 +1233,8 @@
           "cd " + name + "\n" +
           "git init\n" +
           "git branch -M main\n" +
-          "git config user.name \"ASCII Commit Bot\"\n" +
-          "git config user.email \"ascii-commit@example.local\"\n" +
+          "git config user.name " + shellQuote(userName) + "\n" +
+          "git config user.email " + shellQuote(userEmail) + "\n" +
           "cat > config.txt <<'ASCII_COMMIT_CONFIG'\n" +
           currentConfigText +
           "ASCII_COMMIT_CONFIG\n" +
@@ -1256,6 +1274,8 @@
       function downloadJson() {
         const payload = {
           text: els.message.value,
+          gitUserName: els.gitUserName.value,
+          gitUserEmail: els.gitUserEmail.value,
           start: els.start.value,
           end: els.end.value,
           intensity: Number(els.intensity.value),
@@ -1281,6 +1301,8 @@
 
       for (const element of [
         els.message,
+        els.gitUserName,
+        els.gitUserEmail,
         els.fontStyle,
         els.letterGap,
         els.textScale,

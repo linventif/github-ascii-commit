@@ -12,6 +12,7 @@ Open `index.html` directly in a browser. The preview defaults to:
 Available controls:
 
 - text content
+- git user name and email for generated commits
 - contribution intensity
 - font style
 - letter spacing
