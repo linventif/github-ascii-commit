@@ -23,4 +23,4 @@ Available controls:
 - paint tools: pencil, eraser, and clear for live manual edits
 - editable ASCII preview; editing the text updates the calendar grid
 - ASCII toolbar: copy, import/normalize, and download JSON
-- bash setup preview to create a local git repo with `config.txt` ready to commit
+- bash setup preview to create a local git repo and generate the dated commits

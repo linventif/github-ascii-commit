@@ -146,12 +146,6 @@
         margin: 0;
       }
 
-      .paint-tools {
-        display: grid;
-        grid-template-columns: 1fr 1fr auto;
-        gap: 8px;
-      }
-
       .button {
         display: inline-flex;
         align-items: center;
@@ -338,6 +332,13 @@
         padding: 7px;
       }
 
+      .grid-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 10px 36px;
+      }
+
       .legend {
         display: flex;
         align-items: center;
@@ -453,32 +454,6 @@
             </label>
           </div>
 
-          <label>
-            Paint
-            <div class="paint-tools">
-              <button class="button active" id="pencilTool" type="button" title="Pencil">
-                <svg class="tool-icon" aria-hidden="true" viewBox="0 0 24 24">
-                  <path d="M4 20l4.7-1 10-10-3.7-3.7-10 10L4 20z" fill="currentColor" />
-                  <path d="M14 4l2-2 4 4-2 2z" fill="currentColor" opacity="0.65" />
-                </svg>
-                Pencil
-              </button>
-              <button class="button" id="eraserTool" type="button" title="Erase">
-                <svg class="tool-icon" aria-hidden="true" viewBox="0 0 24 24">
-                  <path d="M4 15l8-8 8 8-5 5H9z" fill="currentColor" />
-                  <path d="M9 20h11" stroke="currentColor" stroke-width="2" />
-                </svg>
-                Erase
-              </button>
-              <button class="button" id="clearCanvas" type="button" title="Clear">
-                <svg class="tool-icon" aria-hidden="true" viewBox="0 0 24 24">
-                  <path d="M5 7h14M10 11v6M14 11v6M8 7l1-3h6l1 3M7 7l1 14h8l1-14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
-                </svg>
-                Clear
-              </button>
-            </div>
-          </label>
-
           <div class="status" id="status" aria-live="polite"></div>
         </div>
       </aside>
@@ -487,6 +462,25 @@
         <div class="calendar-head">
           <div class="calendar-title" id="title"></div>
           <div class="calendar-meta" id="meta"></div>
+        </div>
+        <div class="grid-toolbar" aria-label="Paint tools">
+          <button class="button icon-button active" id="pencilTool" type="button" title="Pencil">
+            <svg class="tool-icon" aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M4 20l4.7-1 10-10-3.7-3.7-10 10L4 20z" fill="currentColor" />
+              <path d="M14 4l2-2 4 4-2 2z" fill="currentColor" opacity="0.65" />
+            </svg>
+          </button>
+          <button class="button icon-button" id="eraserTool" type="button" title="Erase">
+            <svg class="tool-icon" aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M4 15l8-8 8 8-5 5H9z" fill="currentColor" />
+              <path d="M9 20h11" stroke="currentColor" stroke-width="2" />
+            </svg>
+          </button>
+          <button class="button icon-button" id="clearCanvas" type="button" title="Clear">
+            <svg class="tool-icon" aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M5 7h14M10 11v6M14 11v6M8 7l1-3h6l1 3M7 7l1 14h8l1-14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+            </svg>
+          </button>
         </div>
         <div class="month-row" id="months"></div>
         <div class="calendar-grid tool-pencil" id="grid"></div>
@@ -552,6 +546,7 @@
       let currentConfigText = "";
       let currentCells = Array.from({ length: WEEKS }, () => Array(DAYS).fill(false));
       let currentActive = Array.from({ length: WEEKS }, () => Array(DAYS).fill(false));
+      let currentDates = Array.from({ length: WEEKS }, () => Array(DAYS).fill(""));
       let paintMode = "pencil";
       let isPainting = false;
       const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -1141,6 +1136,7 @@
 
         currentCells = matrix.map((column) => [...column]);
         currentActive = Array.from({ length: WEEKS }, () => Array(DAYS).fill(false));
+        currentDates = Array.from({ length: WEEKS }, () => Array(DAYS).fill(""));
 
         els.title.textContent = els.message.value || "Empty preview";
         els.meta.textContent = formatShort(rangeStart) + " -> " + formatShort(rangeEnd);
@@ -1167,6 +1163,7 @@
             cell.dataset.week = String(week);
             cell.dataset.day = String(y);
             currentActive[week][y] = activeDate;
+            currentDates[week][y] = dateKey(date);
             updateCellClass(cell, week, y);
 
             els.grid.append(cell);
@@ -1197,19 +1194,46 @@
 
       function updateBashPreview() {
         const name = projectName();
+        const commits = [];
+        const count = Number(els.intensity.value);
+
+        for (let week = 0; week < WEEKS; week += 1) {
+          for (let day = 0; day < DAYS; day += 1) {
+            if (currentActive[week]?.[day] && currentCells[week]?.[day]) {
+              commits.push(currentDates[week][day] + " " + count);
+            }
+          }
+        }
+
+        const commitPlan = commits.length > 0 ? commits.join("\n") + "\n" : "";
 
         els.bashPreview.value =
+          "set -eu\n" +
           "mkdir -p " + name + "\n" +
           "cd " + name + "\n" +
           "git init\n" +
+          "git branch -M main\n" +
+          "git config user.name \"ASCII Commit Bot\"\n" +
+          "git config user.email \"ascii-commit@example.local\"\n" +
           "cat > config.txt <<'ASCII_COMMIT_CONFIG'\n" +
           currentConfigText +
           "ASCII_COMMIT_CONFIG\n" +
-          "git add config.txt\n" +
-          "git commit -m \"Add ASCII commit map config\"\n" +
+          "cat > /tmp/github-ascii-commit-plan.txt <<'ASCII_COMMIT_DATES'\n" +
+          commitPlan +
+          "ASCII_COMMIT_DATES\n" +
+          "touch commit-map.log\n" +
+          "while read -r commit_date commit_count; do\n" +
+          "  [ -n \"${commit_date:-}\" ] || continue\n" +
+          "  i=1\n" +
+          "  while [ \"$i\" -le \"$commit_count\" ]; do\n" +
+          "    printf '%s #%s\\n' \"$commit_date\" \"$i\" >> commit-map.log\n" +
+          "    git add config.txt commit-map.log\n" +
+          "    GIT_AUTHOR_DATE=\"$commit_date 12:00:00\" GIT_COMMITTER_DATE=\"$commit_date 12:00:00\" git commit -m \"Commit map $commit_date #$i\"\n" +
+          "    i=$((i + 1))\n" +
+          "  done\n" +
+          "done < /tmp/github-ascii-commit-plan.txt\n" +
           "printf '\\nNext steps:\\n'\n" +
           "printf '  git remote add origin <your-github-repo-url>\\n'\n" +
-          "printf '  git branch -M main\\n'\n" +
           "printf '  git push -u origin main\\n'\n";
       }
 
