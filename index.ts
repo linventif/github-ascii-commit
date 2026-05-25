@@ -149,12 +149,6 @@ const html = String.raw`<!doctype html>
         margin: 0;
       }
 
-      .actions {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-      }
-
       .paint-tools {
         display: grid;
         grid-template-columns: 1fr 1fr auto;
@@ -180,12 +174,6 @@ const html = String.raw`<!doctype html>
         text-decoration: none;
       }
 
-      .button.primary {
-        border-color: #1f883d;
-        background: #1f883d;
-        color: #fff;
-      }
-
       .button.active {
         border-color: var(--accent);
         background: #ddf4ff;
@@ -204,7 +192,7 @@ const html = String.raw`<!doctype html>
         outline: none;
       }
 
-      .copy-status {
+      .status {
         min-height: 18px;
         color: var(--muted);
         font-size: 12px;
@@ -485,18 +473,7 @@ const html = String.raw`<!doctype html>
             </div>
           </label>
 
-          <div class="actions">
-            <a
-              class="button primary"
-              href="https://github.com/linventif/github-ascii-commit/fork"
-              rel="noopener"
-              target="_blank"
-            >
-              Create project
-            </a>
-            <button class="button" id="copyConfig" type="button">Copy config.txt</button>
-          </div>
-          <div class="copy-status" id="copyStatus" aria-live="polite"></div>
+          <div class="status" id="status" aria-live="polite"></div>
         </div>
       </aside>
 
@@ -677,8 +654,7 @@ const html = String.raw`<!doctype html>
         months: document.querySelector("#months"),
         grid: document.querySelector("#grid"),
         ascii: document.querySelector("#ascii"),
-        copyConfig: document.querySelector("#copyConfig"),
-        copyStatus: document.querySelector("#copyStatus"),
+        status: document.querySelector("#status"),
         copyAscii: document.querySelector("#copyAscii"),
         importAscii: document.querySelector("#importAscii"),
         downloadJson: document.querySelector("#downloadJson"),
@@ -1108,6 +1084,9 @@ const html = String.raw`<!doctype html>
       }
 
       function clearCanvas() {
+        els.message.value = "";
+        els.title.textContent = "Empty preview";
+
         for (let week = 0; week < WEEKS; week += 1) {
           for (let day = 0; day < DAYS; day += 1) {
             if (currentActive[week]?.[day]) {
@@ -1117,6 +1096,7 @@ const html = String.raw`<!doctype html>
         }
 
         refreshGridCellClasses();
+        syncAsciiPreview();
       }
 
       function render() {
@@ -1168,27 +1148,18 @@ const html = String.raw`<!doctype html>
         syncAsciiPreview();
       }
 
-      async function copyConfig() {
-        try {
-          await navigator.clipboard.writeText(currentConfigText);
-          els.copyStatus.textContent = "config.txt copied. Fork the project, edit config.txt, paste, save.";
-        } catch {
-          els.copyStatus.textContent = "Copy failed. Select the preview text and copy it manually.";
-        }
-      }
-
       async function copyAscii() {
         try {
           await navigator.clipboard.writeText(currentConfigText);
-          els.copyStatus.textContent = "ASCII copied.";
+          els.status.textContent = "ASCII copied.";
         } catch {
-          els.copyStatus.textContent = "Copy failed. Select the ASCII text and copy it manually.";
+          els.status.textContent = "Copy failed. Select the ASCII text and copy it manually.";
         }
       }
 
       function importAscii() {
         syncConfigFromAscii();
-        els.copyStatus.textContent = "ASCII imported into the grid.";
+        els.status.textContent = "ASCII imported into the grid.";
       }
 
       function downloadJson() {
@@ -1214,7 +1185,7 @@ const html = String.raw`<!doctype html>
         link.download = "commit-map-config.json";
         link.click();
         URL.revokeObjectURL(link.href);
-        els.copyStatus.textContent = "JSON saved.";
+        els.status.textContent = "JSON saved.";
       }
 
       for (const element of [
@@ -1235,7 +1206,6 @@ const html = String.raw`<!doctype html>
       els.pencilTool.addEventListener("click", () => setPaintMode("pencil"));
       els.eraserTool.addEventListener("click", () => setPaintMode("eraser"));
       els.clearCanvas.addEventListener("click", clearCanvas);
-      els.copyConfig.addEventListener("click", copyConfig);
       els.copyAscii.addEventListener("click", copyAscii);
       els.importAscii.addEventListener("click", importAscii);
       els.downloadJson.addEventListener("click", downloadJson);
