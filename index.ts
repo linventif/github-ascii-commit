@@ -1,0 +1,856 @@
+const DEFAULT_PORT = 49152;
+const port = Number(Bun.env.PORT ?? DEFAULT_PORT);
+
+const html = String.raw`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Commit Map Preview</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f8fa;
+        --panel: #ffffff;
+        --text: #24292f;
+        --muted: #57606a;
+        --border: #d0d7de;
+        --empty: #ebedf0;
+        --out: #f6f8fa;
+        --level-1: #9be9a8;
+        --level-2: #40c463;
+        --level-3: #30a14e;
+        --level-4: #216e39;
+        --accent: #0969da;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+
+      main {
+        display: grid;
+        grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+        gap: 24px;
+        min-height: 100vh;
+        padding: 24px;
+      }
+
+      aside,
+      section {
+        min-width: 0;
+      }
+
+      aside {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 24px;
+        line-height: 1.15;
+      }
+
+      .subtitle {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      .controls {
+        display: grid;
+        gap: 14px;
+        padding: 16px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+
+      label {
+        display: grid;
+        gap: 7px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+      }
+
+      input,
+      select {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--text);
+        font: inherit;
+        font-size: 15px;
+        min-height: 38px;
+        padding: 8px 10px;
+      }
+
+      input:focus,
+      select:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px #0969da26;
+        outline: none;
+      }
+
+      .date-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .control-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .control-value {
+        color: var(--text);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+        font-weight: 700;
+        text-align: right;
+        min-width: 44px;
+      }
+
+      input[type="range"] {
+        min-height: 28px;
+        padding: 0;
+      }
+
+      .toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 38px;
+      }
+
+      .toggle input {
+        width: 18px;
+        min-height: 18px;
+        height: 18px;
+        margin: 0;
+      }
+
+      .preview-shell {
+        overflow: auto;
+        padding: 20px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+
+      .calendar-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+
+      .calendar-title {
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      .calendar-meta {
+        color: var(--muted);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .month-row,
+      .calendar-grid {
+        display: grid;
+        grid-template-columns: 36px repeat(52, 12px);
+        gap: 4px;
+        width: max-content;
+      }
+
+      .month-row {
+        margin-bottom: 6px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .month-row span {
+        height: 14px;
+        line-height: 14px;
+      }
+
+      .weekday {
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 12px;
+        text-align: right;
+      }
+
+      .day {
+        width: 12px;
+        height: 12px;
+        border-radius: 2px;
+        background: var(--empty);
+        box-shadow: inset 0 0 0 1px #1f23280d;
+      }
+
+      .day.out {
+        background: var(--out);
+        box-shadow: inset 0 0 0 1px #d0d7de66;
+      }
+
+      .day.level-1 {
+        background: var(--level-1);
+      }
+
+      .day.level-2 {
+        background: var(--level-2);
+      }
+
+      .day.level-3 {
+        background: var(--level-3);
+      }
+
+      .day.level-4 {
+        background: var(--level-4);
+      }
+
+      .ascii {
+        margin-top: 18px;
+        padding: 14px;
+        overflow: auto;
+        background: #0d1117;
+        border-radius: 8px;
+        color: #7ee787;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.1;
+      }
+
+      .legend {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-top: 14px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .legend .day {
+        flex: 0 0 auto;
+      }
+
+      @media (max-width: 880px) {
+        main {
+          grid-template-columns: 1fr;
+          padding: 16px;
+        }
+
+        .calendar-head {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <aside>
+        <header>
+          <h1>Commit Map Preview</h1>
+          <p class="subtitle">
+            Type text and preview it as a GitHub contribution calendar.
+          </p>
+        </header>
+
+        <div class="controls">
+          <label>
+            Text
+            <input id="message" value="OVH" autocomplete="off" />
+          </label>
+
+          <label>
+            Intensity
+            <select id="intensity">
+              <option value="4">Level 4</option>
+              <option value="3">Level 3</option>
+              <option value="2">Level 2</option>
+              <option value="1">Level 1</option>
+            </select>
+          </label>
+
+          <label>
+            Style
+            <select id="fontStyle">
+              <option value="pixel">Pixel 5x7</option>
+              <option value="block">Canvas block</option>
+              <option value="sans">Sans</option>
+              <option value="serif">Serif</option>
+              <option value="mono">Mono</option>
+              <option value="italic">Italic</option>
+            </select>
+          </label>
+
+          <label>
+            Letter gap
+            <div class="control-row">
+              <input id="letterGap" type="range" min="-2" max="14" step="1" value="1" />
+              <span class="control-value" id="letterGapValue"></span>
+            </div>
+          </label>
+
+          <label>
+            Size
+            <div class="control-row">
+              <input id="textScale" type="range" min="35" max="100" step="1" value="100" />
+              <span class="control-value" id="textScaleValue"></span>
+            </div>
+          </label>
+
+          <label>
+            Thickness
+            <div class="control-row">
+              <input id="textWeight" type="range" min="300" max="900" step="100" value="900" />
+              <span class="control-value" id="textWeightValue"></span>
+            </div>
+          </label>
+
+          <label>
+            Fill
+            <div class="control-row">
+              <input id="fillThreshold" type="range" min="3" max="24" step="1" value="8" />
+              <span class="control-value" id="fillThresholdValue"></span>
+            </div>
+          </label>
+
+          <label>
+            Auto shrink
+            <span class="toggle">
+              Fit text inside selected dates
+              <input id="autoShrink" type="checkbox" checked />
+            </span>
+          </label>
+
+          <div class="date-grid">
+            <label>
+              Start
+              <input id="start" type="date" value="2026-04-19" />
+            </label>
+            <label>
+              End
+              <input id="end" type="date" value="2026-08-31" />
+            </label>
+          </div>
+        </div>
+      </aside>
+
+      <section class="preview-shell" aria-label="Commit calendar preview">
+        <div class="calendar-head">
+          <div class="calendar-title" id="title"></div>
+          <div class="calendar-meta" id="meta"></div>
+        </div>
+        <div class="month-row" id="months"></div>
+        <div class="calendar-grid" id="grid"></div>
+        <div class="legend">
+          Less
+          <span class="day"></span>
+          <span class="day level-1"></span>
+          <span class="day level-2"></span>
+          <span class="day level-3"></span>
+          <span class="day level-4"></span>
+          More
+        </div>
+        <pre class="ascii" id="ascii"></pre>
+      </section>
+    </main>
+
+    <script type="module">
+      const WEEKS = 52;
+      const DAYS = 7;
+      const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const monthLabels = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+      ];
+
+      const font = {
+        A: ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
+        B: ["11110", "10001", "10001", "11110", "10001", "10001", "11110"],
+        C: ["01111", "10000", "10000", "10000", "10000", "10000", "01111"],
+        D: ["11110", "10001", "10001", "10001", "10001", "10001", "11110"],
+        E: ["11111", "10000", "10000", "11110", "10000", "10000", "11111"],
+        F: ["11111", "10000", "10000", "11110", "10000", "10000", "10000"],
+        G: ["01111", "10000", "10000", "10011", "10001", "10001", "01111"],
+        H: ["10001", "10001", "10001", "11111", "10001", "10001", "10001"],
+        I: ["11111", "00100", "00100", "00100", "00100", "00100", "11111"],
+        J: ["00111", "00010", "00010", "00010", "10010", "10010", "01100"],
+        K: ["10001", "10010", "10100", "11000", "10100", "10010", "10001"],
+        L: ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
+        M: ["10001", "11011", "10101", "10101", "10001", "10001", "10001"],
+        N: ["10001", "11001", "10101", "10011", "10001", "10001", "10001"],
+        O: ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
+        P: ["11110", "10001", "10001", "11110", "10000", "10000", "10000"],
+        Q: ["01110", "10001", "10001", "10001", "10101", "10010", "01101"],
+        R: ["11110", "10001", "10001", "11110", "10100", "10010", "10001"],
+        S: ["01111", "10000", "10000", "01110", "00001", "00001", "11110"],
+        T: ["11111", "00100", "00100", "00100", "00100", "00100", "00100"],
+        U: ["10001", "10001", "10001", "10001", "10001", "10001", "01110"],
+        V: ["10001", "10001", "10001", "10001", "10001", "01010", "00100"],
+        W: ["10001", "10001", "10001", "10101", "10101", "10101", "01010"],
+        X: ["10001", "10001", "01010", "00100", "01010", "10001", "10001"],
+        Y: ["10001", "10001", "01010", "00100", "00100", "00100", "00100"],
+        Z: ["11111", "00001", "00010", "00100", "01000", "10000", "11111"],
+        "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
+        "1": ["00100", "01100", "00100", "00100", "00100", "00100", "01110"],
+        "2": ["01110", "10001", "00001", "00010", "00100", "01000", "11111"],
+        "3": ["11110", "00001", "00001", "01110", "00001", "00001", "11110"],
+        "4": ["10010", "10010", "10010", "11111", "00010", "00010", "00010"],
+        "5": ["11111", "10000", "10000", "11110", "00001", "00001", "11110"],
+        "6": ["01110", "10000", "10000", "11110", "10001", "10001", "01110"],
+        "7": ["11111", "00001", "00010", "00100", "01000", "01000", "01000"],
+        "8": ["01110", "10001", "10001", "01110", "10001", "10001", "01110"],
+        "9": ["01110", "10001", "10001", "01111", "00001", "00001", "01110"],
+        " ": ["000", "000", "000", "000", "000", "000", "000"],
+        "-": ["00000", "00000", "00000", "11111", "00000", "00000", "00000"],
+        ".": ["0", "0", "0", "0", "0", "0", "1"],
+        "!": ["1", "1", "1", "1", "1", "0", "1"],
+        "?": ["1110", "0001", "0001", "0010", "0100", "0000", "0100"],
+      };
+
+      const compactFont = {
+        A: ["010", "101", "101", "111", "101", "101", "101"],
+        B: ["110", "101", "101", "110", "101", "101", "110"],
+        C: ["011", "100", "100", "100", "100", "100", "011"],
+        D: ["110", "101", "101", "101", "101", "101", "110"],
+        E: ["111", "100", "100", "110", "100", "100", "111"],
+        F: ["111", "100", "100", "110", "100", "100", "100"],
+        G: ["011", "100", "100", "101", "101", "101", "011"],
+        H: ["101", "101", "101", "111", "101", "101", "101"],
+        I: ["111", "010", "010", "010", "010", "010", "111"],
+        J: ["001", "001", "001", "001", "101", "101", "010"],
+        K: ["101", "101", "110", "100", "110", "101", "101"],
+        L: ["100", "100", "100", "100", "100", "100", "111"],
+        M: ["101", "111", "111", "101", "101", "101", "101"],
+        N: ["101", "111", "111", "111", "111", "111", "101"],
+        O: ["111", "101", "101", "101", "101", "101", "111"],
+        P: ["110", "101", "101", "110", "100", "100", "100"],
+        Q: ["111", "101", "101", "101", "111", "001", "001"],
+        R: ["110", "101", "101", "110", "110", "101", "101"],
+        S: ["011", "100", "100", "010", "001", "001", "110"],
+        T: ["111", "010", "010", "010", "010", "010", "010"],
+        U: ["101", "101", "101", "101", "101", "101", "111"],
+        V: ["101", "101", "101", "101", "101", "101", "010"],
+        W: ["101", "101", "101", "101", "111", "111", "101"],
+        X: ["101", "101", "010", "010", "010", "101", "101"],
+        Y: ["101", "101", "101", "010", "010", "010", "010"],
+        Z: ["111", "001", "001", "010", "100", "100", "111"],
+        "0": ["111", "101", "101", "101", "101", "101", "111"],
+        "1": ["010", "110", "010", "010", "010", "010", "111"],
+        "2": ["110", "001", "001", "010", "100", "100", "111"],
+        "3": ["110", "001", "001", "010", "001", "001", "110"],
+        "4": ["101", "101", "101", "111", "001", "001", "001"],
+        "5": ["111", "100", "100", "110", "001", "001", "110"],
+        "6": ["011", "100", "100", "110", "101", "101", "111"],
+        "7": ["111", "001", "001", "010", "010", "010", "010"],
+        "8": ["111", "101", "101", "111", "101", "101", "111"],
+        "9": ["111", "101", "101", "111", "001", "001", "110"],
+        " ": ["0", "0", "0", "0", "0", "0", "0"],
+        "-": ["000", "000", "000", "111", "000", "000", "000"],
+        ".": ["0", "0", "0", "0", "0", "0", "1"],
+        "!": ["1", "1", "1", "1", "1", "0", "1"],
+        "?": ["110", "001", "001", "010", "010", "000", "010"],
+      };
+
+      const els = {
+        message: document.querySelector("#message"),
+        intensity: document.querySelector("#intensity"),
+        fontStyle: document.querySelector("#fontStyle"),
+        letterGap: document.querySelector("#letterGap"),
+        letterGapValue: document.querySelector("#letterGapValue"),
+        textScale: document.querySelector("#textScale"),
+        textScaleValue: document.querySelector("#textScaleValue"),
+        textWeight: document.querySelector("#textWeight"),
+        textWeightValue: document.querySelector("#textWeightValue"),
+        fillThreshold: document.querySelector("#fillThreshold"),
+        fillThresholdValue: document.querySelector("#fillThresholdValue"),
+        autoShrink: document.querySelector("#autoShrink"),
+        start: document.querySelector("#start"),
+        end: document.querySelector("#end"),
+        title: document.querySelector("#title"),
+        meta: document.querySelector("#meta"),
+        months: document.querySelector("#months"),
+        grid: document.querySelector("#grid"),
+        ascii: document.querySelector("#ascii"),
+      };
+
+      function parseDate(value) {
+        const [year, month, day] = value.split("-").map(Number);
+        return new Date(Date.UTC(year, month - 1, day));
+      }
+
+      function addDays(date, days) {
+        const next = new Date(date);
+        next.setUTCDate(next.getUTCDate() + days);
+        return next;
+      }
+
+      function dateKey(date) {
+        return date.toISOString().slice(0, 10);
+      }
+
+      function formatShort(date) {
+        return date.toLocaleDateString("en-GB", {
+          timeZone: "UTC",
+          day: "2-digit",
+          month: "2-digit",
+        });
+      }
+
+      function firstCalendarDay(start) {
+        return addDays(start, -start.getUTCDay());
+      }
+
+      function weekIndex(firstDay, date) {
+        return Math.floor((date.getTime() - firstDay.getTime()) / 604800000);
+      }
+
+      function glyphWidth(glyph) {
+        return Math.max(...glyph.map((row) => row.length));
+      }
+
+      function pixelTextWidth(text, glyphs, gap) {
+        let width = 0;
+
+        for (let index = 0; index < text.length; index += 1) {
+          const glyph = glyphs[text[index]] ?? glyphs["?"];
+          width += glyphWidth(glyph);
+
+          if (index < text.length - 1) {
+            width += gap;
+          }
+        }
+
+        return width;
+      }
+
+      function choosePixelFont(text, availableWeeks, gap, autoShrink) {
+        if (!autoShrink) {
+          return font;
+        }
+
+        if (pixelTextWidth(text, font, gap) <= availableWeeks) {
+          return font;
+        }
+
+        return compactFont;
+      }
+
+      function createPixelMatrix(text, firstDay, rangeStart, rangeEnd) {
+        const columns = Array.from({ length: WEEKS }, () => Array(DAYS).fill(false));
+        const value = text.trim().toUpperCase();
+
+        if (!value) {
+          return columns;
+        }
+
+        const startWeek = Math.max(0, weekIndex(firstDay, rangeStart));
+        const endWeek = Math.min(WEEKS - 1, weekIndex(firstDay, rangeEnd));
+        const availableWeeks = Math.max(1, endWeek - startWeek + 1);
+        const autoShrink = els.autoShrink.checked;
+        const gap = Math.max(0, Math.round(Number(els.letterGap.value)));
+        const glyphs = choosePixelFont(value, availableWeeks, gap, autoShrink);
+        const textWidth = pixelTextWidth(value, glyphs, gap);
+        const maxWeek = autoShrink ? endWeek : WEEKS - 1;
+        let x = autoShrink
+          ? startWeek + Math.max(0, Math.floor((availableWeeks - textWidth) / 2))
+          : startWeek;
+
+        for (const char of value) {
+          const glyph = glyphs[char] ?? glyphs["?"];
+          const width = glyphWidth(glyph);
+
+          for (let y = 0; y < DAYS; y += 1) {
+            const row = glyph[y] ?? "";
+            for (let col = 0; col < width; col += 1) {
+              const week = x + col;
+
+              if (week > maxWeek) {
+                continue;
+              }
+
+              if (week >= 0 && week < WEEKS && row[col] === "1") {
+                columns[week][y] = true;
+              }
+            }
+          }
+
+          x += width + gap;
+        }
+
+        return columns;
+      }
+
+      function fontFamilyFor(style) {
+        if (style === "serif") {
+          return "Georgia, Times New Roman, serif";
+        }
+
+        if (style === "mono") {
+          return "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+        }
+
+        if (style === "italic") {
+          return "Georgia, Times New Roman, serif";
+        }
+
+        if (style === "sans") {
+          return "Inter, ui-sans-serif, system-ui, sans-serif";
+        }
+
+        return "Arial Black, Impact, ui-sans-serif, system-ui, sans-serif";
+      }
+
+      function fontPrefixFor(style, weight, size) {
+        const slant = style === "italic" ? "italic " : "";
+        return slant + weight + " " + size + "px ";
+      }
+
+      function measureSpacedText(context, text, gap) {
+        let width = 0;
+
+        for (let index = 0; index < text.length; index += 1) {
+          width += context.measureText(text[index]).width;
+          if (index < text.length - 1) {
+            width += gap;
+          }
+        }
+
+        return Math.max(0, width);
+      }
+
+      function drawSpacedText(context, text, startX, centerY, gap) {
+        const width = measureSpacedText(context, text, gap);
+        let x = startX;
+
+        for (let index = 0; index < text.length; index += 1) {
+          const char = text[index];
+          const charWidth = context.measureText(char).width;
+          context.fillText(char, x + charWidth / 2, centerY);
+          x += charWidth + gap;
+        }
+      }
+
+      function createScaledMatrix(text, firstDay, rangeStart, rangeEnd) {
+        const columns = Array.from({ length: WEEKS }, () => Array(DAYS).fill(false));
+        const value = text.trim();
+
+        if (!value) {
+          return columns;
+        }
+
+        const startWeek = Math.max(0, weekIndex(firstDay, rangeStart));
+        const endWeek = Math.min(WEEKS - 1, weekIndex(firstDay, rangeEnd));
+        const availableWeeks = Math.max(1, endWeek - startWeek + 1);
+        const autoShrink = els.autoShrink.checked;
+        const renderWeeks = autoShrink ? availableWeeks : WEEKS - startWeek;
+        const sample = 18;
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+
+        canvas.width = renderWeeks * sample;
+        canvas.height = DAYS * sample;
+
+        if (!context) {
+          return columns;
+        }
+
+        const family = fontFamilyFor(els.fontStyle.value);
+        const weight = Number(els.textWeight.value);
+        const letterGap = Number(els.letterGap.value) * sample * 0.08;
+        const textScale = Number(els.textScale.value) / 100;
+        let fontSize = canvas.height * textScale;
+
+        while (autoShrink && fontSize > 3) {
+          context.font = fontPrefixFor(els.fontStyle.value, weight, fontSize) + family;
+          const metrics = context.measureText(value);
+          const measuredWidth = measureSpacedText(context, value, letterGap);
+          const measuredHeight =
+            metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
+
+          if (
+            measuredWidth <= canvas.width * 0.94 &&
+            measuredHeight <= canvas.height * 0.86
+          ) {
+            break;
+          }
+
+          fontSize -= 1;
+        }
+
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.fillStyle = "#fff";
+        context.font = fontPrefixFor(els.fontStyle.value, weight, Math.max(3, fontSize)) + family;
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        const textWidth = measureSpacedText(context, value, letterGap);
+        const textX = autoShrink ? (canvas.width - textWidth) / 2 : sample * 0.4;
+        drawSpacedText(context, value, textX, canvas.height / 2, letterGap);
+
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        const minCoverage = sample * sample * (Number(els.fillThreshold.value) / 100);
+
+        for (let week = 0; week < renderWeeks; week += 1) {
+          for (let day = 0; day < DAYS; day += 1) {
+            let coverage = 0;
+
+            for (let y = day * sample; y < (day + 1) * sample; y += 1) {
+              for (let x = week * sample; x < (week + 1) * sample; x += 1) {
+                const alpha = pixels[(y * canvas.width + x) * 4 + 3];
+                if (alpha > 32) {
+                  coverage += 1;
+                }
+              }
+            }
+
+            if (coverage >= minCoverage) {
+              columns[startWeek + week][day] = true;
+            }
+          }
+        }
+
+        return columns;
+      }
+
+      function renderMonths(firstDay) {
+        els.months.replaceChildren();
+        els.months.append(document.createElement("span"));
+
+        let previousMonth = -1;
+        for (let week = 0; week < WEEKS; week += 1) {
+          const date = addDays(firstDay, week * DAYS);
+          const span = document.createElement("span");
+
+          if (date.getUTCMonth() !== previousMonth) {
+            span.textContent = monthLabels[date.getUTCMonth()];
+            previousMonth = date.getUTCMonth();
+          }
+
+          els.months.append(span);
+        }
+      }
+
+      function render() {
+        const start = parseDate(els.start.value);
+        const end = parseDate(els.end.value);
+        const rangeStart = start <= end ? start : end;
+        const rangeEnd = start <= end ? end : start;
+        const firstDay = firstCalendarDay(rangeStart);
+        const matrix =
+          els.fontStyle.value === "pixel"
+            ? createPixelMatrix(els.message.value, firstDay, rangeStart, rangeEnd)
+            : createScaledMatrix(els.message.value, firstDay, rangeStart, rangeEnd);
+        const level = els.intensity.value;
+        const allowOverflow = !els.autoShrink.checked;
+
+        els.title.textContent = els.message.value || "Empty preview";
+        els.meta.textContent = formatShort(rangeStart) + " -> " + formatShort(rangeEnd);
+        els.letterGapValue.textContent = els.letterGap.value + "px";
+        els.textScaleValue.textContent = els.textScale.value + "%";
+        els.textWeightValue.textContent = els.textWeight.value;
+        els.fillThresholdValue.textContent = els.fillThreshold.value + "%";
+
+        renderMonths(firstDay);
+        els.grid.replaceChildren();
+
+        const asciiRows = Array.from({ length: DAYS }, () => "");
+
+        for (let y = 0; y < DAYS; y += 1) {
+          const label = document.createElement("div");
+          label.className = "weekday";
+          label.textContent = weekdayLabels[y];
+          els.grid.append(label);
+
+          for (let week = 0; week < WEEKS; week += 1) {
+            const date = addDays(firstDay, week * DAYS + y);
+            const activeDate = allowOverflow ? date >= rangeStart : date >= rangeStart && date <= rangeEnd;
+            const activeText = matrix[week]?.[y] ?? false;
+            const cell = document.createElement("span");
+            cell.className = "day";
+            cell.title = dateKey(date);
+
+            if (!activeDate) {
+              cell.classList.add("out");
+              asciiRows[y] += ".";
+            } else if (activeText) {
+              cell.classList.add("level-" + level);
+              asciiRows[y] += "#";
+            } else {
+              asciiRows[y] += " ";
+            }
+
+            els.grid.append(cell);
+          }
+        }
+
+        els.ascii.textContent = asciiRows.join("\n");
+      }
+
+      for (const element of [
+        els.message,
+        els.intensity,
+        els.fontStyle,
+        els.letterGap,
+        els.textScale,
+        els.textWeight,
+        els.fillThreshold,
+        els.autoShrink,
+        els.start,
+        els.end,
+      ]) {
+        element.addEventListener("input", render);
+      }
+
+      render();
+    </script>
+  </body>
+</html>`;
+
+const server = Bun.serve({
+  port,
+  fetch() {
+    return new Response(html, {
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+      },
+    });
+  },
+});
+
+console.log(`Commit map preview: http://localhost:${server.port}`);
