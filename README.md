@@ -29,3 +29,4 @@ Available controls:
 - copy config button for pasting the generated design into `config.txt`
 - paint tools: pencil, eraser, and clear for live manual edits
 - editable ASCII preview; editing the text updates the calendar grid
+- ASCII toolbar: copy, import/normalize, and download JSON

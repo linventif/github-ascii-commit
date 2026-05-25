@@ -308,8 +308,7 @@ const html = String.raw`<!doctype html>
       .ascii {
         display: block;
         width: 100%;
-        min-height: 120px;
-        margin-top: 18px;
+        min-height: 128px;
         padding: 14px;
         overflow: auto;
         background: #0d1117;
@@ -327,6 +326,22 @@ const html = String.raw`<!doctype html>
         border-color: var(--accent);
         box-shadow: 0 0 0 3px #0969da26;
         outline: none;
+      }
+
+      .ascii-panel {
+        margin-top: 18px;
+      }
+
+      .ascii-toolbar {
+        display: inline-flex;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+
+      .icon-button {
+        width: 36px;
+        min-height: 34px;
+        padding: 7px;
       }
 
       .legend {
@@ -501,13 +516,32 @@ const html = String.raw`<!doctype html>
           <span class="day level-4"></span>
           More
         </div>
-        <textarea
-          class="ascii"
-          id="ascii"
-          aria-label="Editable ASCII config preview"
-          spellcheck="false"
-          wrap="off"
-        ></textarea>
+        <div class="ascii-panel">
+          <div class="ascii-toolbar" aria-label="ASCII actions">
+            <button class="button icon-button" id="copyAscii" type="button" title="Copy ASCII">
+              <svg class="tool-icon" aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M8 8h11v13H8zM5 3h11v3M5 3v13h1" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2" />
+              </svg>
+            </button>
+            <button class="button icon-button" id="importAscii" type="button" title="Import ASCII">
+              <svg class="tool-icon" aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M12 3v12M7 10l5 5 5-5M5 21h14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+              </svg>
+            </button>
+            <button class="button icon-button" id="downloadJson" type="button" title="Download JSON">
+              <svg class="tool-icon" aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M12 3v11M8 10l4 4 4-4M5 21h14M6 3h7l5 5v9" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+              </svg>
+            </button>
+          </div>
+          <textarea
+            class="ascii"
+            id="ascii"
+            aria-label="Editable ASCII config preview"
+            spellcheck="false"
+            wrap="off"
+          ></textarea>
+        </div>
       </section>
     </main>
 
@@ -645,6 +679,9 @@ const html = String.raw`<!doctype html>
         ascii: document.querySelector("#ascii"),
         copyConfig: document.querySelector("#copyConfig"),
         copyStatus: document.querySelector("#copyStatus"),
+        copyAscii: document.querySelector("#copyAscii"),
+        importAscii: document.querySelector("#importAscii"),
+        downloadJson: document.querySelector("#downloadJson"),
         pencilTool: document.querySelector("#pencilTool"),
         eraserTool: document.querySelector("#eraserTool"),
         clearCanvas: document.querySelector("#clearCanvas"),
@@ -954,6 +991,12 @@ const html = String.raw`<!doctype html>
       }
 
       function syncAsciiPreview() {
+        const rows = rowsFromCells();
+        currentConfigText = rows.join("\n").trimEnd() + "\n";
+        els.ascii.value = rows.join("\n");
+      }
+
+      function rowsFromCells() {
         const rows = Array.from({ length: DAYS }, () => "");
 
         for (let day = 0; day < DAYS; day += 1) {
@@ -962,31 +1005,57 @@ const html = String.raw`<!doctype html>
           }
         }
 
-        currentConfigText = rows.join("\n").trimEnd() + "\n";
-        els.ascii.value = currentConfigText;
+        return rows;
+      }
+
+      function cursorPosition(text, offset) {
+        const before = text.slice(0, offset).split("\n");
+        return {
+          line: before.length - 1,
+          column: before[before.length - 1].length,
+        };
+      }
+
+      function cursorOffset(text, position) {
+        const rows = text.split("\n");
+        let offset = 0;
+
+        for (let line = 0; line < Math.min(position.line, rows.length); line += 1) {
+          offset += rows[line].length + 1;
+        }
+
+        return offset + Math.min(position.column, rows[position.line]?.length ?? 0);
+      }
+
+      function isFilledAsciiChar(char) {
+        return Boolean(char) && ![" ", ".", "_", "0"].includes(char);
       }
 
       function syncConfigFromAscii() {
-        const rows = els.ascii.value.replace(/\r/g, "").split("\n");
-        const filledChars = new Set(["#", "1", "x", "X", "█", "■", "*"]);
+        const rawValue = els.ascii.value.replace(/\r/g, "");
+        const startPosition = cursorPosition(rawValue, els.ascii.selectionStart ?? 0);
+        const endPosition = cursorPosition(rawValue, els.ascii.selectionEnd ?? 0);
+        const rows = rawValue.split("\n");
 
         for (let day = 0; day < DAYS; day += 1) {
           const row = rows[day] ?? "";
 
           for (let week = 0; week < WEEKS; week += 1) {
             if (currentActive[week]?.[day]) {
-              currentCells[week][day] = filledChars.has(row[week] ?? " ");
+              currentCells[week][day] = isFilledAsciiChar(row[week] ?? " ");
             }
           }
         }
 
-        currentConfigText = rows
-          .slice(0, DAYS)
-          .map((row) => row.slice(0, WEEKS).padEnd(WEEKS, " "))
-          .join("\n")
-          .trimEnd() + "\n";
+        const normalizedValue = rowsFromCells().join("\n");
+        currentConfigText = normalizedValue.trimEnd() + "\n";
+        els.ascii.value = normalizedValue;
 
-        refreshGridCells();
+        refreshGridCellClasses();
+        els.ascii.setSelectionRange(
+          cursorOffset(normalizedValue, startPosition),
+          cursorOffset(normalizedValue, endPosition),
+        );
       }
 
       function refreshGridCells() {
@@ -1108,6 +1177,46 @@ const html = String.raw`<!doctype html>
         }
       }
 
+      async function copyAscii() {
+        try {
+          await navigator.clipboard.writeText(currentConfigText);
+          els.copyStatus.textContent = "ASCII copied.";
+        } catch {
+          els.copyStatus.textContent = "Copy failed. Select the ASCII text and copy it manually.";
+        }
+      }
+
+      function importAscii() {
+        syncConfigFromAscii();
+        els.copyStatus.textContent = "ASCII imported into the grid.";
+      }
+
+      function downloadJson() {
+        const payload = {
+          text: els.message.value,
+          start: els.start.value,
+          end: els.end.value,
+          intensity: Number(els.intensity.value),
+          style: els.fontStyle.value,
+          letterGap: Number(els.letterGap.value),
+          size: Number(els.textScale.value),
+          thickness: Number(els.textWeight.value),
+          fill: Number(els.fillThreshold.value),
+          autoShrink: els.autoShrink.checked,
+          ascii: currentConfigText.replace(/\n$/, ""),
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2) + "\n"], {
+          type: "application/json",
+        });
+        const link = document.createElement("a");
+
+        link.href = URL.createObjectURL(blob);
+        link.download = "commit-map-config.json";
+        link.click();
+        URL.revokeObjectURL(link.href);
+        els.copyStatus.textContent = "JSON saved.";
+      }
+
       for (const element of [
         els.message,
         els.fontStyle,
@@ -1127,6 +1236,9 @@ const html = String.raw`<!doctype html>
       els.eraserTool.addEventListener("click", () => setPaintMode("eraser"));
       els.clearCanvas.addEventListener("click", clearCanvas);
       els.copyConfig.addEventListener("click", copyConfig);
+      els.copyAscii.addEventListener("click", copyAscii);
+      els.importAscii.addEventListener("click", importAscii);
+      els.downloadJson.addEventListener("click", downloadJson);
       els.ascii.addEventListener("input", syncConfigFromAscii);
       els.grid.addEventListener("pointerdown", (event) => {
         event.preventDefault();
@@ -1176,7 +1288,6 @@ const html = String.raw`<!doctype html>
 
       setDefaultDateRange();
       setPaintMode("pencil");
-      render();
       render();
     </script>
   </body>
