@@ -10,8 +10,8 @@ bun run dev
 
 Open the local URL printed by Bun. The preview defaults to:
 
-- text: `test test`
-- date range: `19/06` to `31/08`
+- text: `OVH`
+- date range: today minus 6 months to today plus 6 months
 - grid: 7 weekdays by 52 weeks
 
 Available controls:
@@ -25,3 +25,6 @@ Available controls:
 - fill density
 - auto shrink toggle; disable it to let text overflow instead of being compressed
 - pixel font mode for cleaner 7-row ASCII letters such as `OVH`
+- create project button that opens the GitHub fork page
+- copy config button for pasting the generated design into `config.txt`
+- paint tools: pencil, eraser, and clear for live manual edits

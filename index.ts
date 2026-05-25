@@ -149,6 +149,60 @@ const html = String.raw`<!doctype html>
         margin: 0;
       }
 
+      .actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .paint-tools {
+        display: grid;
+        grid-template-columns: 1fr 1fr auto;
+        gap: 8px;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--text);
+        cursor: pointer;
+        font: inherit;
+        font-size: 14px;
+        font-weight: 700;
+        padding: 8px 12px;
+        text-align: center;
+        text-decoration: none;
+      }
+
+      .button.primary {
+        border-color: #1f883d;
+        background: #1f883d;
+        color: #fff;
+      }
+
+      .button.active {
+        border-color: var(--accent);
+        background: #ddf4ff;
+        color: #0550ae;
+      }
+
+      .button:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px #0969da26;
+        outline: none;
+      }
+
+      .copy-status {
+        min-height: 18px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
       .preview-shell {
         overflow: auto;
         padding: 20px;
@@ -183,6 +237,8 @@ const html = String.raw`<!doctype html>
         grid-template-columns: 36px repeat(52, 12px);
         gap: 4px;
         width: max-content;
+        touch-action: none;
+        user-select: none;
       }
 
       .month-row {
@@ -208,11 +264,13 @@ const html = String.raw`<!doctype html>
         height: 12px;
         border-radius: 2px;
         background: var(--empty);
+        cursor: crosshair;
         box-shadow: inset 0 0 0 1px #1f23280d;
       }
 
       .day.out {
         background: var(--out);
+        cursor: not-allowed;
         box-shadow: inset 0 0 0 1px #d0d7de66;
       }
 
@@ -351,13 +409,35 @@ const html = String.raw`<!doctype html>
           <div class="date-grid">
             <label>
               Start
-              <input id="start" type="date" value="2026-04-19" />
+              <input id="start" type="date" />
             </label>
             <label>
               End
-              <input id="end" type="date" value="2026-08-31" />
+              <input id="end" type="date" />
             </label>
           </div>
+
+          <label>
+            Paint
+            <div class="paint-tools">
+              <button class="button active" id="pencilTool" type="button">Pencil</button>
+              <button class="button" id="eraserTool" type="button">Erase</button>
+              <button class="button" id="clearCanvas" type="button">Clear</button>
+            </div>
+          </label>
+
+          <div class="actions">
+            <a
+              class="button primary"
+              href="https://github.com/linventif/github-ascii-commit/fork"
+              rel="noopener"
+              target="_blank"
+            >
+              Create project
+            </a>
+            <button class="button" id="copyConfig" type="button">Copy config.txt</button>
+          </div>
+          <div class="copy-status" id="copyStatus" aria-live="polite"></div>
         </div>
       </aside>
 
@@ -384,6 +464,11 @@ const html = String.raw`<!doctype html>
     <script type="module">
       const WEEKS = 52;
       const DAYS = 7;
+      let currentConfigText = "";
+      let currentCells = Array.from({ length: WEEKS }, () => Array(DAYS).fill(false));
+      let currentActive = Array.from({ length: WEEKS }, () => Array(DAYS).fill(false));
+      let paintMode = "pencil";
+      let isPainting = false;
       const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       const monthLabels = [
         "Jan",
@@ -508,6 +593,11 @@ const html = String.raw`<!doctype html>
         months: document.querySelector("#months"),
         grid: document.querySelector("#grid"),
         ascii: document.querySelector("#ascii"),
+        copyConfig: document.querySelector("#copyConfig"),
+        copyStatus: document.querySelector("#copyStatus"),
+        pencilTool: document.querySelector("#pencilTool"),
+        eraserTool: document.querySelector("#eraserTool"),
+        clearCanvas: document.querySelector("#clearCanvas"),
       };
 
       function parseDate(value) {
@@ -523,6 +613,36 @@ const html = String.raw`<!doctype html>
 
       function dateKey(date) {
         return date.toISOString().slice(0, 10);
+      }
+
+      function formatDateInput(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return year + "-" + month + "-" + day;
+      }
+
+      function shiftMonths(date, offset) {
+        const shifted = new Date(date);
+        const day = shifted.getDate();
+
+        shifted.setDate(1);
+        shifted.setMonth(shifted.getMonth() + offset);
+
+        const maxDay = new Date(
+          shifted.getFullYear(),
+          shifted.getMonth() + 1,
+          0,
+        ).getDate();
+
+        shifted.setDate(Math.min(day, maxDay));
+        return shifted;
+      }
+
+      function setDefaultDateRange() {
+        const today = new Date();
+        els.start.value = formatDateInput(shiftMonths(today, -6));
+        els.end.value = formatDateInput(shiftMonths(today, 6));
       }
 
       function formatShort(date) {
@@ -766,6 +886,77 @@ const html = String.raw`<!doctype html>
         }
       }
 
+      function updateCellClass(cell, week, day) {
+        const active = currentActive[week]?.[day] ?? false;
+        const filled = currentCells[week]?.[day] ?? false;
+        const level = els.intensity.value;
+
+        cell.className = "day";
+
+        if (!active) {
+          cell.classList.add("out");
+          return;
+        }
+
+        if (filled) {
+          cell.classList.add("level-" + level);
+        }
+      }
+
+      function syncAsciiPreview() {
+        const rows = Array.from({ length: DAYS }, () => "");
+
+        for (let day = 0; day < DAYS; day += 1) {
+          for (let week = 0; week < WEEKS; week += 1) {
+            rows[day] += currentActive[week]?.[day] && currentCells[week]?.[day] ? "#" : " ";
+          }
+        }
+
+        currentConfigText = rows.join("\n").trimEnd() + "\n";
+        els.ascii.textContent = currentConfigText;
+      }
+
+      function refreshGridCells() {
+        for (const cell of els.grid.querySelectorAll(".day")) {
+          const week = Number(cell.dataset.week);
+          const day = Number(cell.dataset.day);
+          updateCellClass(cell, week, day);
+        }
+
+        syncAsciiPreview();
+      }
+
+      function setPaintMode(mode) {
+        paintMode = mode;
+        els.pencilTool.classList.toggle("active", mode === "pencil");
+        els.eraserTool.classList.toggle("active", mode === "eraser");
+      }
+
+      function paintCell(cell) {
+        const week = Number(cell.dataset.week);
+        const day = Number(cell.dataset.day);
+
+        if (!currentActive[week]?.[day]) {
+          return;
+        }
+
+        currentCells[week][day] = paintMode === "pencil";
+        updateCellClass(cell, week, day);
+        syncAsciiPreview();
+      }
+
+      function clearCanvas() {
+        for (let week = 0; week < WEEKS; week += 1) {
+          for (let day = 0; day < DAYS; day += 1) {
+            if (currentActive[week]?.[day]) {
+              currentCells[week][day] = false;
+            }
+          }
+        }
+
+        refreshGridCells();
+      }
+
       function render() {
         const start = parseDate(els.start.value);
         const end = parseDate(els.end.value);
@@ -776,8 +967,10 @@ const html = String.raw`<!doctype html>
           els.fontStyle.value === "pixel"
             ? createPixelMatrix(els.message.value, firstDay, rangeStart, rangeEnd)
             : createScaledMatrix(els.message.value, firstDay, rangeStart, rangeEnd);
-        const level = els.intensity.value;
         const allowOverflow = !els.autoShrink.checked;
+
+        currentCells = matrix.map((column) => [...column]);
+        currentActive = Array.from({ length: WEEKS }, () => Array(DAYS).fill(false));
 
         els.title.textContent = els.message.value || "Empty preview";
         els.meta.textContent = formatShort(rangeStart) + " -> " + formatShort(rangeEnd);
@@ -789,8 +982,6 @@ const html = String.raw`<!doctype html>
         renderMonths(firstDay);
         els.grid.replaceChildren();
 
-        const asciiRows = Array.from({ length: DAYS }, () => "");
-
         for (let y = 0; y < DAYS; y += 1) {
           const label = document.createElement("div");
           label.className = "weekday";
@@ -800,31 +991,32 @@ const html = String.raw`<!doctype html>
           for (let week = 0; week < WEEKS; week += 1) {
             const date = addDays(firstDay, week * DAYS + y);
             const activeDate = allowOverflow ? date >= rangeStart : date >= rangeStart && date <= rangeEnd;
-            const activeText = matrix[week]?.[y] ?? false;
             const cell = document.createElement("span");
             cell.className = "day";
             cell.title = dateKey(date);
-
-            if (!activeDate) {
-              cell.classList.add("out");
-              asciiRows[y] += ".";
-            } else if (activeText) {
-              cell.classList.add("level-" + level);
-              asciiRows[y] += "#";
-            } else {
-              asciiRows[y] += " ";
-            }
+            cell.dataset.week = String(week);
+            cell.dataset.day = String(y);
+            currentActive[week][y] = activeDate;
+            updateCellClass(cell, week, y);
 
             els.grid.append(cell);
           }
         }
 
-        els.ascii.textContent = asciiRows.join("\n");
+        syncAsciiPreview();
+      }
+
+      async function copyConfig() {
+        try {
+          await navigator.clipboard.writeText(currentConfigText);
+          els.copyStatus.textContent = "config.txt copied. Fork the project, edit config.txt, paste, save.";
+        } catch {
+          els.copyStatus.textContent = "Copy failed. Select the preview text and copy it manually.";
+        }
       }
 
       for (const element of [
         els.message,
-        els.intensity,
         els.fontStyle,
         els.letterGap,
         els.textScale,
@@ -837,6 +1029,37 @@ const html = String.raw`<!doctype html>
         element.addEventListener("input", render);
       }
 
+      els.intensity.addEventListener("input", refreshGridCells);
+      els.pencilTool.addEventListener("click", () => setPaintMode("pencil"));
+      els.eraserTool.addEventListener("click", () => setPaintMode("eraser"));
+      els.clearCanvas.addEventListener("click", clearCanvas);
+      els.copyConfig.addEventListener("click", copyConfig);
+      els.grid.addEventListener("pointerdown", (event) => {
+        const cell = event.target.closest(".day");
+
+        if (!cell) {
+          return;
+        }
+
+        isPainting = true;
+        paintCell(cell);
+      });
+      els.grid.addEventListener("pointerover", (event) => {
+        if (!isPainting) {
+          return;
+        }
+
+        const cell = event.target.closest(".day");
+
+        if (cell) {
+          paintCell(cell);
+        }
+      });
+      window.addEventListener("pointerup", () => {
+        isPainting = false;
+      });
+
+      setDefaultDateRange();
       render();
     </script>
   </body>
