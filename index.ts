@@ -326,6 +326,15 @@ const html = String.raw`<!doctype html>
         margin-bottom: 8px;
       }
 
+      .preview-label {
+        display: block;
+        margin: 18px 0 8px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
       .icon-button {
         width: 36px;
         min-height: 34px;
@@ -519,6 +528,24 @@ const html = String.raw`<!doctype html>
             wrap="off"
           ></textarea>
         </div>
+        <div class="ascii-panel">
+          <span class="preview-label">Bash setup</span>
+          <div class="ascii-toolbar" aria-label="Bash actions">
+            <button class="button icon-button" id="copyBash" type="button" title="Copy bash setup">
+              <svg class="tool-icon" aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M8 8h11v13H8zM5 3h11v3M5 3v13h1" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="2" />
+              </svg>
+            </button>
+          </div>
+          <textarea
+            class="ascii"
+            id="bashPreview"
+            aria-label="Bash setup command preview"
+            readonly
+            spellcheck="false"
+            wrap="off"
+          ></textarea>
+        </div>
       </section>
     </main>
 
@@ -658,6 +685,8 @@ const html = String.raw`<!doctype html>
         copyAscii: document.querySelector("#copyAscii"),
         importAscii: document.querySelector("#importAscii"),
         downloadJson: document.querySelector("#downloadJson"),
+        copyBash: document.querySelector("#copyBash"),
+        bashPreview: document.querySelector("#bashPreview"),
         pencilTool: document.querySelector("#pencilTool"),
         eraserTool: document.querySelector("#eraserTool"),
         clearCanvas: document.querySelector("#clearCanvas"),
@@ -970,6 +999,7 @@ const html = String.raw`<!doctype html>
         const rows = rowsFromCells();
         currentConfigText = rows.join("\n").trimEnd() + "\n";
         els.ascii.value = rows.join("\n");
+        updateBashPreview();
       }
 
       function rowsFromCells() {
@@ -1026,6 +1056,7 @@ const html = String.raw`<!doctype html>
         const normalizedValue = rowsFromCells().join("\n");
         currentConfigText = normalizedValue.trimEnd() + "\n";
         els.ascii.value = normalizedValue;
+        updateBashPreview();
 
         refreshGridCellClasses();
         els.ascii.setSelectionRange(
@@ -1157,6 +1188,43 @@ const html = String.raw`<!doctype html>
         }
       }
 
+      function projectName() {
+        const clean = els.message.value
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+
+        return clean ? "github-ascii-" + clean : "github-ascii-commit";
+      }
+
+      function updateBashPreview() {
+        const name = projectName();
+
+        els.bashPreview.value =
+          "mkdir -p " + name + "\n" +
+          "cd " + name + "\n" +
+          "git init\n" +
+          "cat > config.txt <<'ASCII_COMMIT_CONFIG'\n" +
+          currentConfigText +
+          "ASCII_COMMIT_CONFIG\n" +
+          "git add config.txt\n" +
+          "git commit -m \"Add ASCII commit map config\"\n" +
+          "printf '\\nNext steps:\\n'\n" +
+          "printf '  git remote add origin <your-github-repo-url>\\n'\n" +
+          "printf '  git branch -M main\\n'\n" +
+          "printf '  git push -u origin main\\n'\n";
+      }
+
+      async function copyBash() {
+        try {
+          await navigator.clipboard.writeText(els.bashPreview.value);
+          els.status.textContent = "Bash setup copied.";
+        } catch {
+          els.status.textContent = "Copy failed. Select the bash preview and copy it manually.";
+        }
+      }
+
       function importAscii() {
         syncConfigFromAscii();
         els.status.textContent = "ASCII imported into the grid.";
@@ -1209,6 +1277,7 @@ const html = String.raw`<!doctype html>
       els.copyAscii.addEventListener("click", copyAscii);
       els.importAscii.addEventListener("click", importAscii);
       els.downloadJson.addEventListener("click", downloadJson);
+      els.copyBash.addEventListener("click", copyBash);
       els.ascii.addEventListener("input", syncConfigFromAscii);
       els.grid.addEventListener("pointerdown", (event) => {
         event.preventDefault();
