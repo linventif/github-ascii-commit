@@ -1,14 +1,9 @@
-# OVH Commit Map
+# GitHub ASCII Commit Map
 
-Bun/TypeScript preview for writing text into a GitHub-style `7 x 52` commit
+Static HTML preview for writing text into a GitHub-style `7 x 52` commit
 calendar.
 
-```sh
-bun install
-bun run dev
-```
-
-Open the local URL printed by Bun. The preview defaults to:
+Open `index.html` directly in a browser. The preview defaults to:
 
 - text: `OVH`
 - date range: today minus 6 months to today plus 6 months

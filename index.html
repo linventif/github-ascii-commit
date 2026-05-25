@@ -1,7 +1,4 @@
-const DEFAULT_PORT = 49152;
-const port = Number(Bun.env.PORT ?? DEFAULT_PORT);
-
-const html = String.raw`<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -1330,17 +1327,4 @@ const html = String.raw`<!doctype html>
       render();
     </script>
   </body>
-</html>`;
-
-const server = Bun.serve({
-  port,
-  fetch() {
-    return new Response(html, {
-      headers: {
-        "content-type": "text/html; charset=utf-8",
-      },
-    });
-  },
-});
-
-console.log(`Commit map preview: http://localhost:${server.port}`);
+</html>
