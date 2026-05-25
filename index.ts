@@ -306,15 +306,27 @@ const html = String.raw`<!doctype html>
       }
 
       .ascii {
+        display: block;
+        width: 100%;
+        min-height: 120px;
         margin-top: 18px;
         padding: 14px;
         overflow: auto;
         background: #0d1117;
+        border: 1px solid #30363d;
         border-radius: 8px;
         color: #7ee787;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 12px;
         line-height: 1.1;
+        resize: vertical;
+        white-space: pre;
+      }
+
+      .ascii:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px #0969da26;
+        outline: none;
       }
 
       .legend {
@@ -489,7 +501,13 @@ const html = String.raw`<!doctype html>
           <span class="day level-4"></span>
           More
         </div>
-        <pre class="ascii" id="ascii"></pre>
+        <textarea
+          class="ascii"
+          id="ascii"
+          aria-label="Editable ASCII config preview"
+          spellcheck="false"
+          wrap="off"
+        ></textarea>
       </section>
     </main>
 
@@ -945,7 +963,30 @@ const html = String.raw`<!doctype html>
         }
 
         currentConfigText = rows.join("\n").trimEnd() + "\n";
-        els.ascii.textContent = currentConfigText;
+        els.ascii.value = currentConfigText;
+      }
+
+      function syncConfigFromAscii() {
+        const rows = els.ascii.value.replace(/\r/g, "").split("\n");
+        const filledChars = new Set(["#", "1", "x", "X", "█", "■", "*"]);
+
+        for (let day = 0; day < DAYS; day += 1) {
+          const row = rows[day] ?? "";
+
+          for (let week = 0; week < WEEKS; week += 1) {
+            if (currentActive[week]?.[day]) {
+              currentCells[week][day] = filledChars.has(row[week] ?? " ");
+            }
+          }
+        }
+
+        currentConfigText = rows
+          .slice(0, DAYS)
+          .map((row) => row.slice(0, WEEKS).padEnd(WEEKS, " "))
+          .join("\n")
+          .trimEnd() + "\n";
+
+        refreshGridCells();
       }
 
       function refreshGridCells() {
@@ -956,6 +997,14 @@ const html = String.raw`<!doctype html>
         }
 
         syncAsciiPreview();
+      }
+
+      function refreshGridCellClasses() {
+        for (const cell of els.grid.querySelectorAll(".day")) {
+          const week = Number(cell.dataset.week);
+          const day = Number(cell.dataset.day);
+          updateCellClass(cell, week, day);
+        }
       }
 
       function setPaintMode(mode) {
@@ -998,7 +1047,7 @@ const html = String.raw`<!doctype html>
           }
         }
 
-        refreshGridCells();
+        refreshGridCellClasses();
       }
 
       function render() {
@@ -1078,6 +1127,7 @@ const html = String.raw`<!doctype html>
       els.eraserTool.addEventListener("click", () => setPaintMode("eraser"));
       els.clearCanvas.addEventListener("click", clearCanvas);
       els.copyConfig.addEventListener("click", copyConfig);
+      els.ascii.addEventListener("input", syncConfigFromAscii);
       els.grid.addEventListener("pointerdown", (event) => {
         event.preventDefault();
         isPainting = true;
@@ -1126,6 +1176,7 @@ const html = String.raw`<!doctype html>
 
       setDefaultDateRange();
       setPaintMode("pencil");
+      render();
       render();
     </script>
   </body>

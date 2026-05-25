@@ -28,3 +28,4 @@ Available controls:
 - create project button that opens the GitHub fork page
 - copy config button for pasting the generated design into `config.txt`
 - paint tools: pencil, eraser, and clear for live manual edits
+- editable ASCII preview; editing the text updates the calendar grid
