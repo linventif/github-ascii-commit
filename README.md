@@ -5,7 +5,7 @@ calendar.
 
 Open `index.html` directly in a browser. The preview defaults to:
 
-- text: `OVH`
+- text: `test`
 - date range: today minus 6 months to today plus 6 months
 - grid: 7 weekdays by 52 weeks
 
@@ -19,7 +19,7 @@ Available controls:
 - text thickness
 - fill density
 - auto shrink toggle; disable it to let text overflow instead of being compressed
-- pixel font mode for cleaner 7-row ASCII letters such as `OVH`
+- pixel font mode for cleaner 7-row ASCII letters
 - paint tools: pencil, eraser, and clear for live manual edits
 - editable ASCII preview; editing the text updates the calendar grid
 - ASCII toolbar: copy, import/normalize, and download JSON
