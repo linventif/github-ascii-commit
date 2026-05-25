@@ -5,7 +5,14 @@ calendar.
 
 Try it online: https://linventif.github.io/github-ascii-commit/
 
-![Preview](preview.png)
+[![GitHub ASCII Commit Map preview](preview.png)](https://linventif.github.io/github-ascii-commit/)
+
+## GitHub Preview
+
+Use the generated bash script to create dated commits and draw your ASCII design
+directly in your GitHub contribution graph.
+
+![GitHub contribution graph preview](preview-github.png)
 
 ## Usage
 
