@@ -164,6 +164,7 @@ const html = String.raw`<!doctype html>
       .button {
         display: inline-flex;
         align-items: center;
+        gap: 7px;
         justify-content: center;
         min-height: 40px;
         border: 1px solid var(--border);
@@ -189,6 +190,12 @@ const html = String.raw`<!doctype html>
         border-color: var(--accent);
         background: #ddf4ff;
         color: #0550ae;
+      }
+
+      .tool-icon {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 auto;
       }
 
       .button:focus {
@@ -241,6 +248,16 @@ const html = String.raw`<!doctype html>
         user-select: none;
       }
 
+      .calendar-grid.tool-pencil {
+        cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M4 20l4.7-1 10-10-3.7-3.7-10 10L4 20z' fill='%230969da'/%3E%3Cpath d='M14 4l2-2 4 4-2 2z' fill='%2324292f'/%3E%3C/svg%3E") 3 21,
+          crosshair;
+      }
+
+      .calendar-grid.tool-eraser {
+        cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M4 15l8-8 8 8-5 5H9z' fill='%23cf222e'/%3E%3Cpath d='M9 20h11' stroke='%2324292f' stroke-width='2'/%3E%3C/svg%3E") 6 18,
+          cell;
+      }
+
       .month-row {
         margin-bottom: 6px;
         color: var(--muted);
@@ -264,13 +281,11 @@ const html = String.raw`<!doctype html>
         height: 12px;
         border-radius: 2px;
         background: var(--empty);
-        cursor: crosshair;
         box-shadow: inset 0 0 0 1px #1f23280d;
       }
 
       .day.out {
         background: var(--out);
-        cursor: not-allowed;
         box-shadow: inset 0 0 0 1px #d0d7de66;
       }
 
@@ -420,9 +435,26 @@ const html = String.raw`<!doctype html>
           <label>
             Paint
             <div class="paint-tools">
-              <button class="button active" id="pencilTool" type="button">Pencil</button>
-              <button class="button" id="eraserTool" type="button">Erase</button>
-              <button class="button" id="clearCanvas" type="button">Clear</button>
+              <button class="button active" id="pencilTool" type="button" title="Pencil">
+                <svg class="tool-icon" aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M4 20l4.7-1 10-10-3.7-3.7-10 10L4 20z" fill="currentColor" />
+                  <path d="M14 4l2-2 4 4-2 2z" fill="currentColor" opacity="0.65" />
+                </svg>
+                Pencil
+              </button>
+              <button class="button" id="eraserTool" type="button" title="Erase">
+                <svg class="tool-icon" aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M4 15l8-8 8 8-5 5H9z" fill="currentColor" />
+                  <path d="M9 20h11" stroke="currentColor" stroke-width="2" />
+                </svg>
+                Erase
+              </button>
+              <button class="button" id="clearCanvas" type="button" title="Clear">
+                <svg class="tool-icon" aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M5 7h14M10 11v6M14 11v6M8 7l1-3h6l1 3M7 7l1 14h8l1-14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+                </svg>
+                Clear
+              </button>
             </div>
           </label>
 
@@ -447,7 +479,7 @@ const html = String.raw`<!doctype html>
           <div class="calendar-meta" id="meta"></div>
         </div>
         <div class="month-row" id="months"></div>
-        <div class="calendar-grid" id="grid"></div>
+        <div class="calendar-grid tool-pencil" id="grid"></div>
         <div class="legend">
           Less
           <span class="day"></span>
@@ -930,6 +962,18 @@ const html = String.raw`<!doctype html>
         paintMode = mode;
         els.pencilTool.classList.toggle("active", mode === "pencil");
         els.eraserTool.classList.toggle("active", mode === "eraser");
+        els.grid.classList.toggle("tool-pencil", mode === "pencil");
+        els.grid.classList.toggle("tool-eraser", mode === "eraser");
+      }
+
+      function cellFromEvent(event) {
+        const directCell = event.target.closest?.(".day");
+
+        if (directCell) {
+          return directCell;
+        }
+
+        return document.elementFromPoint(event.clientX, event.clientY)?.closest?.(".day") ?? null;
       }
 
       function paintCell(cell) {
@@ -1035,31 +1079,53 @@ const html = String.raw`<!doctype html>
       els.clearCanvas.addEventListener("click", clearCanvas);
       els.copyConfig.addEventListener("click", copyConfig);
       els.grid.addEventListener("pointerdown", (event) => {
-        const cell = event.target.closest(".day");
-
-        if (!cell) {
-          return;
-        }
-
+        event.preventDefault();
         isPainting = true;
-        paintCell(cell);
+        const cell = cellFromEvent(event);
+
+        if (cell) {
+          paintCell(cell);
+        }
       });
       els.grid.addEventListener("pointerover", (event) => {
         if (!isPainting) {
           return;
         }
 
-        const cell = event.target.closest(".day");
+        const cell = cellFromEvent(event);
 
         if (cell) {
           paintCell(cell);
         }
+      });
+      els.grid.addEventListener("pointermove", (event) => {
+        if (!isPainting) {
+          return;
+        }
+
+        const cell = cellFromEvent(event);
+
+        if (cell) {
+          paintCell(cell);
+        }
+      });
+      window.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) {
+          return;
+        }
+
+        if (event.target.closest?.("input, select, textarea, button, a, .controls, .ascii")) {
+          return;
+        }
+
+        isPainting = true;
       });
       window.addEventListener("pointerup", () => {
         isPainting = false;
       });
 
       setDefaultDateRange();
+      setPaintMode("pencil");
       render();
     </script>
   </body>
