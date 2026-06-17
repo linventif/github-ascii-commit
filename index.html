@@ -402,6 +402,11 @@
           </label>
 
           <label>
+            Commit multiplier
+            <input id="commitMultiplier" type="number" min="1" step="0.25" value="10" />
+          </label>
+
+          <label>
             Style
             <select id="fontStyle">
               <option value="pixel">Pixel 5x7</option>
@@ -670,6 +675,7 @@
         gitUserName: document.querySelector("#gitUserName"),
         gitUserEmail: document.querySelector("#gitUserEmail"),
         intensity: document.querySelector("#intensity"),
+        commitMultiplier: document.querySelector("#commitMultiplier"),
         fontStyle: document.querySelector("#fontStyle"),
         letterGap: document.querySelector("#letterGap"),
         letterGapValue: document.querySelector("#letterGapValue"),
@@ -1210,10 +1216,17 @@
         return "'" + String(value).replace(/'/g, "'\\''") + "'";
       }
 
+      function commitCountForLevel(level) {
+        const multiplier = Number(els.commitMultiplier.value);
+        const safeMultiplier = Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1;
+
+        return Math.max(1, Math.round(Number(level) * safeMultiplier));
+      }
+
       function updateBashPreview() {
         const name = projectName();
         const commits = [];
-        const count = Number(els.intensity.value);
+        const count = commitCountForLevel(els.intensity.value);
         const userName = els.gitUserName.value.trim() || "ASCII Commit Bot";
         const userEmail = els.gitUserEmail.value.trim() || "ascii-commit@example.local";
 
@@ -1279,6 +1292,7 @@
           start: els.start.value,
           end: els.end.value,
           intensity: Number(els.intensity.value),
+          commitMultiplier: Number(els.commitMultiplier.value),
           style: els.fontStyle.value,
           letterGap: Number(els.letterGap.value),
           size: Number(els.textScale.value),
@@ -1303,6 +1317,7 @@
         els.message,
         els.gitUserName,
         els.gitUserEmail,
+        els.commitMultiplier,
         els.fontStyle,
         els.letterGap,
         els.textScale,

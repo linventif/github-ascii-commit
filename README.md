@@ -28,6 +28,7 @@ preview defaults to:
 - text content
 - git user name and email for generated commits
 - contribution intensity
+- commit multiplier for scaling generated commits per active day
 - font style
 - letter spacing
 - max text size
